@@ -228,9 +228,9 @@ func (t *Tree[T]) Has(cmp CompareAgainst[T]) bool {
 func (t *Tree[T]) Fetch(item T) (v T, found bool) {
 	n := t.root
 	for n != nil {
-		if t.less(n.i, item) {
+		if t.less(item, n.i) {
 			n = n.l
-		} else if t.less(item, n.i) {
+		} else if t.less(n.i, item) {
 			n = n.r
 		} else {
 			found = true

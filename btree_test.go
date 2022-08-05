@@ -846,3 +846,13 @@ func TestCopyOnWriteRace(t *testing.T) {
 	cancel()
 	wg.Wait()
 }
+
+func TestFetch(t *testing.T) {
+	tree := New[int](il, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	for i := 1; i < 10; i++ {
+		v, ok := tree.Fetch(i)
+		if !ok || v != i {
+			t.Fatalf("Failed to fetch %d, got %d", i, v)
+		}
+	}
+}
