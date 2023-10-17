@@ -12,15 +12,15 @@ const (
 // an item in the Tree.
 // An example of how it should work:
 //
-//    comparer := func(reference i) CompareAgainst {
-//        return func(treeItem i) int {
-//            switch {
-//            case LessThan(treeItem, reference): return Less
-//            case LessThan(reference, treeItem): return Greater
-//            default: return Equal
-//            }
-//        }
-//    }
+//	comparer := func(reference i) CompareAgainst {
+//	    return func(treeItem i) int {
+//	        switch {
+//	        case LessThan(treeItem, reference): return Less
+//	        case LessThan(reference, treeItem): return Greater
+//	        default: return Equal
+//	        }
+//	    }
+//	}
 //
 // CompareAgainst must return:
 //
@@ -269,6 +269,18 @@ func (t *Tree[T]) InsertWith(fill Fill[T]) *Tree[T] {
 		res.insertOne(ins, v)
 	}
 	fill(thunk)
+	return res
+}
+
+// InsertFrom returns a new Tree with data added from a compatible Iterator
+// t and the new Tree will share nodes where possible.
+func (t *Tree[T]) InsertFrom(src *Iterator[T]) *Tree[T] {
+	res := t.Fork()
+	ins := res.getNsp()
+	defer res.putNsp(ins)
+	for src.Next() {
+		res.insertOne(ins, src.Item())
+	}
 	return res
 }
 
