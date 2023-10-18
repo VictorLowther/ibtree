@@ -208,6 +208,43 @@ func TestIter(t *testing.T) {
 	if !reflect.DeepEqual(expect, res) {
 		t.Fatalf("Range failed: expected %v, got %v", expect, res)
 	}
+	expect = []string{"a", "a!", "a-", "aa", "aaa", "ab", "aba", "abc", "b"}
+	for i := range expect {
+		res = nil
+		iter = tree.OffsetAndLimit(i, -1)
+		for iter.Next() {
+			res = append(res, iter.Item())
+		}
+		if !reflect.DeepEqual(expect[i:], res) {
+			t.Fatalf("Range failed: expected %v, got %v", expect[i:], res)
+		}
+	}
+	for i := range expect {
+		res = nil
+		end := len(expect) - i
+		iter = tree.OffsetAndLimit(0, end)
+		for iter.Next() {
+			res = append(res, iter.Item())
+		}
+		if !reflect.DeepEqual(expect[:end], res) {
+			t.Fatalf("Range failed: expected %v, got %v", expect[:end], res)
+		}
+	}
+	for i := range expect {
+		res = nil
+		end := 4
+		if end > len(expect[i:]) {
+			end = len(expect[i:])
+		}
+		exp := expect[i : i+end]
+		iter = tree.OffsetAndLimit(i, end)
+		for iter.Next() {
+			res = append(res, iter.Item())
+		}
+		if !reflect.DeepEqual(exp, res) {
+			t.Fatalf("Range failed: expected %v, got %v", exp, res)
+		}
+	}
 }
 
 func TestIterDirection(t *testing.T) {

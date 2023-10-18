@@ -272,9 +272,9 @@ func (t *Tree[T]) InsertWith(fill Fill[T]) *Tree[T] {
 	return res
 }
 
-// InsertFrom returns a new Tree with data added from a compatible Iterator
+// InsertFrom returns a new Tree with data added from a compatible Iter
 // t and the new Tree will share nodes where possible.
-func (t *Tree[T]) InsertFrom(src *Iterator[T]) *Tree[T] {
+func (t *Tree[T]) InsertFrom(src Iter[T]) *Tree[T] {
 	res := t.Fork()
 	ins := res.getNsp()
 	defer res.putNsp(ins)

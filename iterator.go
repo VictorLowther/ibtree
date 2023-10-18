@@ -44,10 +44,10 @@ func Ne[T any](c CompareAgainst[T]) Test[T] {
 	return func(idx T) bool { return c(idx) != Equal }
 }
 
-// Iterator holds state needed to iterate over a binary Tree.
+// cmpIter holds state needed to iterate over a binary Tree.
 // You must not modify the Tree while iterating over it, lest you
 // get undefined results and/or panics.
-type Iterator[T any] struct {
+type cmpIter[T any] struct {
 	t           *Tree[T]
 	stack       []*node[T]
 	workingNode *node[T]
@@ -55,17 +55,36 @@ type Iterator[T any] struct {
 	ascending   bool
 }
 
-func (i *Iterator[T]) clearStack() {
+func (i *cmpIter[T]) clearStack() {
 	for k := range i.stack {
 		i.stack[k] = nil
 	}
 	i.stack = i.stack[:0]
 }
 
-// Release releases the state the Iterator holds.
+// Iter is used to iterate over a binary tree.
+type Iter[T any] interface {
+	// Release releases all state that the Iterator holds.
+	// Next and Prev will both return false, and calling Item
+	// will panic.
+	Release()
+	// Next will move to the next item in the Tree.  It will return true
+	// if it was able to move, or False if there are no more items.
+	Next() bool
+	// Prev returns to the previous item in the Tree.  It will return true
+	// if it was able to move, or False if there were no more items or
+	// if the Iterator cannot move backwards.
+	Prev() bool
+	// Item returns the current item in the tree that the Iterator points to.
+	// assuming the previous call to Next or Prev returned true.  It will panic
+	// otherwise.
+	Item() T
+}
+
+// Release releases the state the cmpIter holds.
 // Subsequent calls to Next will return false, and subsequent
 // calls to Item will panic.
-func (i *Iterator[T]) Release() {
+func (i *cmpIter[T]) Release() {
 	i.clearStack()
 	i.workingNode = nil
 	i.start = nil
@@ -73,7 +92,7 @@ func (i *Iterator[T]) Release() {
 	i.t = nil
 }
 
-func (i *Iterator[T]) stackHead() *node[T] {
+func (i *cmpIter[T]) stackHead() *node[T] {
 	switch idx := len(i.stack); idx {
 	case 0:
 		return nil
@@ -82,11 +101,11 @@ func (i *Iterator[T]) stackHead() *node[T] {
 	}
 }
 
-func (i *Iterator[T]) push(n *node[T]) {
+func (i *cmpIter[T]) push(n *node[T]) {
 	i.stack = append(i.stack, n)
 }
 
-func (i *Iterator[T]) pop() {
+func (i *cmpIter[T]) pop() {
 	switch idx := len(i.stack); idx {
 	case 0:
 		i.workingNode = nil
@@ -104,20 +123,20 @@ func (i *Iterator[T]) pop() {
 	return
 }
 
-func (i *Iterator[T]) swapHead() {
+func (i *cmpIter[T]) swapHead() {
 	i.stack[len(i.stack)-1] = i.workingNode
 }
 
 // Item returns the item that the current node points to.
 // It will panic if iteration has not yet started, or if iteration has finished.
-func (i *Iterator[T]) Item() T {
+func (i *cmpIter[T]) Item() T {
 	if len(i.stack) == 0 {
 		panic("No iteration in progress")
 	}
 	return i.workingNode.i
 }
 
-func (i *Iterator[T]) pickNextNode(current, next, bound *node[T], boundCheck Test[T]) *node[T] {
+func (i *cmpIter[T]) pickNextNode(current, next, bound *node[T], boundCheck Test[T]) *node[T] {
 	if boundCheck != nil && boundCheck(current.i) {
 		return bound
 	}
@@ -125,19 +144,19 @@ func (i *Iterator[T]) pickNextNode(current, next, bound *node[T], boundCheck Tes
 	return next
 }
 
-func (i *Iterator[T]) min(n *node[T]) {
+func (i *cmpIter[T]) min(n *node[T]) {
 	for n != nil {
 		n = i.pickNextNode(n, n.l, n.r, i.start)
 	}
 }
 
-func (i *Iterator[T]) max(n *node[T]) {
+func (i *cmpIter[T]) max(n *node[T]) {
 	for n != nil {
 		n = i.pickNextNode(n, n.r, n.l, i.stop)
 	}
 }
 
-func (i *Iterator[T]) init(ascending bool, orNot Test[T]) bool {
+func (i *cmpIter[T]) init(ascending bool, orNot Test[T]) bool {
 	if i.workingNode != nil {
 		if ascending {
 			i.min(i.workingNode)
@@ -157,7 +176,7 @@ func (i *Iterator[T]) init(ascending bool, orNot Test[T]) bool {
 	}
 }
 
-func (i *Iterator[T]) changeDirection() bool {
+func (i *cmpIter[T]) changeDirection() bool {
 	i.ascending = !i.ascending
 	i.clearStack()
 	v := i.workingNode.i
@@ -186,7 +205,7 @@ func (i *Iterator[T]) changeDirection() bool {
 //
 // If Next returns true, Item will return the item that
 // the current node contains.
-func (i *Iterator[T]) Next() bool {
+func (i *cmpIter[T]) Next() bool {
 	if len(i.stack) == 0 {
 		return i.init(true, i.stop)
 	}
@@ -215,7 +234,7 @@ func (i *Iterator[T]) Next() bool {
 //
 // If Prev returns true, Item will return the item that
 // the current node contains.
-func (i *Iterator[T]) Prev() bool {
+func (i *cmpIter[T]) Prev() bool {
 	if len(i.stack) == 0 {
 		return i.init(false, i.stop)
 	}
@@ -239,7 +258,7 @@ func (i *Iterator[T]) Prev() bool {
 	return true
 }
 
-// Iterator creates a new Iterator that will ignore all items on the left for which start returns true and
+// Iterator creates a new cmpIter that will ignore all items on the left for which start returns true and
 // all items on the right for which stop returns true.
 //
 // start should be one of Lt (inclusive), Lte (exclusive)
@@ -248,7 +267,7 @@ func (i *Iterator[T]) Prev() bool {
 //
 // If either start or stop is nil, then that condition will not apply.
 //
-// After the Iterator is created, you must call Next or Prev to
+// After the cmpIter is created, you must call Next or Prev to
 // fetch the initial item.  Calling Next will start iteration with the
 // smallest item in the Tree that start returns false for, and calling Prev
 // will start iteration with the largest item in the Tree that stop returns
@@ -256,14 +275,16 @@ func (i *Iterator[T]) Prev() bool {
 //
 // Example:
 //
-//    iter := Tree.Iterator(nil,nil)
-//    for iter.Next() {
-//        fmt.Println(iter.Item())
-//    }
+//	iter := Tree.cmpIter(nil,nil)
+//	for iter.Next() {
+//	    fmt.Println(iter.Item())
+//	}
 //
 // will print all the items in Tree in order.
-func (t *Tree[T]) Iterator(start, stop Test[T]) *Iterator[T] {
-	return &Iterator[T]{
+//
+// The Iter[T] returned from this function will have operational Next() and Prev() methods.
+func (t *Tree[T]) Iterator(start, stop Test[T]) Iter[T] {
+	return &cmpIter[T]{
 		t:           t,
 		workingNode: t.root,
 		start:       start,
@@ -315,7 +336,7 @@ func (t *Tree[T]) Before(stop, iterator Test[T]) {
 	}
 }
 
-// Walk will call Iterator once for each item in the Tree in ascending order.
+// Walk will call cmpIter once for each item in the Tree in ascending order.
 // Walk will return early if iterator returns false.
 func (t *Tree[T]) Walk(iterator Test[T]) {
 	i := t.Iterator(nil, nil)
@@ -324,4 +345,101 @@ func (t *Tree[T]) Walk(iterator Test[T]) {
 			i.Release()
 		}
 	}
+}
+
+type rangeIter[T any] struct {
+	t             *Tree[T]
+	stack         []*node[T]
+	offset, limit int
+}
+
+func (r *rangeIter[T]) workingNode() *node[T] {
+	offset := len(r.stack) - 1
+	if offset == -1 {
+		return nil
+	}
+	return r.stack[offset]
+}
+
+func (r *rangeIter[T]) pop() *node[T] {
+	offset := len(r.stack) - 1
+	if offset == -1 {
+		return nil
+	}
+	res := r.stack[offset]
+	r.stack[offset] = nil
+	r.stack = r.stack[:offset]
+	return res
+}
+
+func (r *rangeIter[T]) Release() {
+	r.stack = nil
+	r.t = nil
+}
+
+func (r *rangeIter[T]) Item() T {
+	n := r.workingNode()
+	if n == nil {
+		panic("Iterator not initialized")
+	}
+	return n.i
+}
+
+func (r *rangeIter[T]) Prev() bool {
+	return false
+}
+
+func (r *rangeIter[T]) min(n *node[T]) {
+	for {
+		r.stack = append(r.stack, n)
+		if n.l == nil {
+			return
+		}
+		n = n.l
+	}
+}
+
+func (r *rangeIter[T]) next() {
+	if r.offset > 0 {
+		r.offset--
+	}
+	n := r.pop()
+	if n != nil && n.r != nil {
+		r.min(n.r)
+	}
+}
+
+func (r *rangeIter[T]) Next() bool {
+	if len(r.stack) == 0 {
+		if r.t == nil {
+			return false
+		}
+		if r.t.root != nil {
+			r.min(r.t.root)
+		}
+		for r.offset > 0 && len(r.stack) > 0 {
+			r.next()
+		}
+	} else {
+		r.next()
+	}
+	if r.limit == 0 || r.workingNode() == nil {
+		r.Release()
+		return false
+	}
+	if r.limit > 0 {
+		r.limit--
+	}
+	return true
+}
+
+// OffsetAndLimit returns an Iter that skips the first offset items
+// and returns up to limit items. Passing limit of -1 will cause
+// OffsetAndLimit to iterate to the last item in the tree.
+//
+// The Iter returned by OffsetAndLimit cannot run backwards -- the
+// Prev() method will always return false and not affect the current
+// position of the Iter.
+func (t *Tree[T]) OffsetAndLimit(offset, limit int) Iter[T] {
+	return &rangeIter[T]{t: t, offset: offset, limit: limit}
 }
