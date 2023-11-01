@@ -93,10 +93,12 @@ func New[T any](lt LessThan[T], items ...T) *Tree[T] {
 	res := &Tree[T]{less: lt, nsp: &sync.Pool{New: func() any {
 		return &nodeStack[T]{seen: map[uintptr]struct{}{}}
 	}}}
-	ins := res.getNsp()
-	defer res.putNsp(ins)
-	for i := range items {
-		res.insertOne(ins, items[i])
+	if len(items) > 0 {
+		ins := res.getNsp()
+		defer res.putNsp(ins)
+		for i := range items {
+			res.insertOne(ins, items[i])
+		}
 	}
 	return res
 }
@@ -117,6 +119,19 @@ func CreateWith[T any](lt LessThan[T], fill Fill[T]) *Tree[T] {
 		res.insertOne(ins, i)
 	}
 	fill(thunk)
+	return res
+}
+
+// Bud creates a new Tree with the passed-in items
+func (t *Tree[T]) Bud(lt LessThan[T], items ...T) *Tree[T] {
+	res := &Tree[T]{less: lt, nsp: t.nsp}
+	if len(items) > 0 {
+		ins := res.getNsp()
+		defer res.putNsp(ins)
+		for i := range items {
+			res.insertOne(ins, items[i])
+		}
+	}
 	return res
 }
 
