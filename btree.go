@@ -3,9 +3,11 @@ package ibtree
 import "sync"
 
 const (
-	Less    = -1
-	Equal   = 0
-	Greater = 1
+	leftHeavy  = -2
+	Less       = -1
+	Equal      = 0
+	Greater    = 1
+	rightHeavy = 2
 )
 
 // CompareAgainst is a comparison function that compares a reference item to
@@ -377,6 +379,18 @@ func (t *Tree[T]) DeleteWith(erase Erase[T]) *Tree[T] {
 		return
 	}
 	erase(thunk)
+	return res
+}
+
+// DeleteFrom returns a tree that lacks all the items returned by src.
+// The original tree is left unchanged.
+func (t *Tree[T]) DeleteFrom(src Iter[T]) *Tree[T] {
+	res := t.Fork()
+	ins := res.getNsp()
+	defer res.putNsp(ins)
+	for src.Next() {
+		res.deleteOne(ins, src.Item())
+	}
 	return res
 }
 

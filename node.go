@@ -267,7 +267,7 @@ func rebalance[T any](ins *nodeStack[T]) {
 		oh := n.h
 		switch n.balance() {
 		case Less, Equal, Greater:
-		case 2:
+		case rightHeavy:
 			// Tree is excessively right-heavy, rotate it to the left.
 			n.r = ins.copy(n.r)
 			if n.r.balance() < 0 {
@@ -283,7 +283,7 @@ func rebalance[T any](ins *nodeStack[T]) {
 				n = n.rotateLeft()
 			}
 			n.l.setHeight()
-		case -2:
+		case leftHeavy:
 			// Tree is excessively left-heavy, rotate it to the right
 			n.l = ins.copy(n.l)
 			if n.l.balance() > 0 {
