@@ -12,11 +12,11 @@ import (
 	"time"
 )
 
-func (n *node[T]) height() uint {
+func (n *node[T]) height() uint64 {
 	if n == nil {
 		return 0
 	}
-	return n.h
+	return n.h()
 }
 
 // balanced checks a Tree to ensure it is AVL compliant.
@@ -25,20 +25,20 @@ func (n *node[T]) balanced(t *testing.T) {
 	if n == nil {
 		return
 	}
-	if n.h == 0 {
+	if n.h() == 0 {
 		panic("Zero height")
 	}
-	if n.h == 1 && !(n.r == nil && n.l == nil) {
+	if n.h() == 1 && !(n.r == nil && n.l == nil) {
 		panic("Height 1 node has children")
 	}
-	if n.h > 1 && n.r == nil && n.l == nil {
+	if n.h() > 1 && n.r == nil && n.l == nil {
 		panic("Interior node has no children")
 	}
 	lh, rh := n.l.height(), n.r.height()
-	if lh >= n.h || rh >= n.h {
+	if lh >= n.h() || rh >= n.h() {
 		panic("Child height greater than ours")
 	}
-	if !(n.h-lh == 1 || n.h-rh == 1) {
+	if !(n.h()-lh == 1 || n.h()-rh == 1) {
 		panic("Height not max(lh,rh)+1")
 	}
 	b := n.balance()

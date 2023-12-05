@@ -1,31 +1,18 @@
 package ibtree
 
-import (
-	"unsafe"
-)
-
 // node is a generic type that represents a node in the AVL Tree.
 type node[T any] struct {
-	l *node[T] // left child
-	r *node[T] // right child
-	h uint     // height of the node.
-	i T        // The item the node is holding.
+	l    *node[T] // left child
+	r    *node[T] // right child
+	genH uint64   // Generation and height of the node.
+	i    T        // The item the node is holding.
 }
 
 // nodeStack keeps track of nodes that are modified during insert and delete operations.
 // The node at position 0 is the root of the tree.
 type nodeStack[T any] struct {
-	startedWithEmpty bool                 // if we start with an empty root, skip seen map operations.
-	s                []*node[T]           // The stack of nodes we are currently manipulating.
-	seen             map[uintptr]struct{} // Keep track of new nodes created. Used to avoid excess node copies.
-}
-
-func (ns *nodeStack[T]) seenAt(i uintptr) bool {
-	if ns.startedWithEmpty {
-		return true
-	}
-	_, ok := ns.seen[i]
-	return ok
+	s   []*node[T] // The stack of nodes we are currently manipulating.
+	gen uint64
 }
 
 func (ns *nodeStack[T]) clear() {
@@ -33,19 +20,14 @@ func (ns *nodeStack[T]) clear() {
 }
 
 func (ns *nodeStack[T]) newNode(v T) *node[T] {
-	res := &node[T]{i: v, h: 1}
-	if !ns.startedWithEmpty {
-		ns.seen[uintptr(unsafe.Pointer(res))] = struct{}{}
-	}
-	return res
+	return &node[T]{i: v, genH: (ns.gen << 8) | 0x01}
 }
 
 func (ns *nodeStack[T]) copy(n *node[T]) *node[T] {
-	if !ns.seenAt(uintptr(unsafe.Pointer(n))) {
-		n = n.copy()
-		ns.seen[uintptr(unsafe.Pointer(n))] = struct{}{}
+	if n.gen() == ns.gen {
+		return n
 	}
-	return n
+	return &node[T]{l: n.l, r: n.r, i: n.i, genH: (ns.gen << 8) | (n.h())}
 }
 
 func (ns *nodeStack[T]) add(n *node[T]) {
@@ -80,11 +62,20 @@ func (ns *nodeStack[T]) set(at int, v *node[T]) {
 }
 
 func (ns *nodeStack[T]) drop() {
-	pos := ns.pos(-1)
-	n := ns.s[pos]
-	delete(ns.seen, uintptr(unsafe.Pointer(n)))
 	ns.set(ns.pos(-1), nil)
 	ns.s = ns.s[:ns.pos(-1)]
+}
+
+// gen returns this node's generation.
+func (n *node[T]) gen() uint64 {
+	return n.genH >> 8
+}
+
+// h returns the node's height in the tree from the least significant byte of genH.
+// This limits the tree height to 255, but given that the wost case height of
+// an AVL tree is 1.44(log(n)) we will never overflow it on a 64 bit system
+func (n *node[T]) h() uint64 {
+	return n.genH & 0xff
 }
 
 // balance calculates the relative balance of a node.
@@ -92,69 +83,50 @@ func (ns *nodeStack[T]) drop() {
 // and positive numbers indicate a Tree that is right-heavy.
 func (n *node[T]) balance() (res int) {
 	if n.l != nil {
-		res -= int(n.l.h)
+		res -= int(n.l.h())
 	}
 	if n.r != nil {
-		res += int(n.r.h)
+		res += int(n.r.h())
 	}
 	return
-}
-
-func (n *node[T]) copy() *node[T] {
-	return &node[T]{l: n.l, r: n.r, h: n.h, i: n.i}
 }
 
 // setHeight calculates the height of this node.
 func (n *node[T]) setHeight() {
-	n.h = 0
+	h := uint64(0)
 	if n.l != nil {
-		n.h = n.l.h
-	}
-	if n.r != nil && n.r.h >= n.h {
-		n.h = n.r.h
-	}
-	n.h++
-	return
-}
-
-func copyNodes[T any](n *node[T], reverse bool) *node[T] {
-	if n == nil {
-		return nil
-	}
-	res := &node[T]{h: n.h, i: n.i}
-	res.h = n.h
-	if n.l != nil {
-		if reverse {
-			res.r = copyNodes(n.l, reverse)
-		} else {
-			res.l = copyNodes(n.l, reverse)
-		}
+		h = n.l.h()
 	}
 	if n.r != nil {
-		if reverse {
-			res.l = copyNodes(n.r, reverse)
-		} else {
-			res.r = copyNodes(n.r, reverse)
+		if rh := n.r.h(); rh >= h {
+			h = rh
 		}
 	}
-	return res
+	h++
+	n.genH &= ^uint64(0xff)
+	n.genH |= h
+	return
 }
 
 // rotateLeft transforms
 //
-//   |
-//   a
-//  / \
+//	 |
+//	 a
+//	/ \
+//
 // x   b
-//    / \
-//   y   z
+//
+//	 / \
+//	y   z
 //
 // to
-//     |
-//     b
-//    / \
-//   a   z
-//  / \
+//
+//	   |
+//	   b
+//	  / \
+//	 a   z
+//	/ \
+//
 // x   y
 func (a *node[T]) rotateLeft() (b *node[T]) {
 	b = a.r
@@ -165,21 +137,24 @@ func (a *node[T]) rotateLeft() (b *node[T]) {
 
 // rotateRight is the inverse of rotateLeft. it transforms
 //
-//     |
-//     a(h)
-//    / \
-//   b   z
-//  / \
+//	   |
+//	   a(h)
+//	  / \
+//	 b   z
+//	/ \
+//
 // x   y
 //
 // to
 //
-//   |
-//   b
-//  / \
+//	 |
+//	 b
+//	/ \
+//
 // x   a
-//    / \
-//   y   z
+//
+//	 / \
+//	y   z
 func (a *node[T]) rotateRight() (b *node[T]) {
 	b = a.l
 	a.l = b.r
@@ -264,7 +239,7 @@ func rebalance[T any](ins *nodeStack[T]) {
 	var n *node[T]
 	for i := len(ins.s) - 1; i >= 0; i-- {
 		n = ins.s[i]
-		oh := n.h
+		oh := n.h()
 		switch n.balance() {
 		case Less, Equal, Greater:
 		case rightHeavy:
@@ -304,7 +279,7 @@ func rebalance[T any](ins *nodeStack[T]) {
 		}
 		ins.s[i] = n
 		n.setHeight()
-		if oh == n.h {
+		if oh == n.h() {
 			break
 		}
 	}

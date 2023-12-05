@@ -8,6 +8,7 @@ const (
 	Equal      = 0
 	Greater    = 1
 	rightHeavy = 2
+	maxGens    = uint64(1 << 56)
 )
 
 // CompareAgainst is a comparison function that compares a reference item to
@@ -44,27 +45,25 @@ type Tree[T any] struct {
 	nsp   *sync.Pool
 	root  *node[T]
 	less  LessThan[T]
+	gen   uint64
 	count int
 }
 
 func (t *Tree[T]) getNsp() *nodeStack[T] {
-	return t.nsp.Get().(*nodeStack[T])
+	res := t.nsp.Get().(*nodeStack[T])
+	res.gen = t.gen
+	return res
 }
 
 func (t *Tree[T]) putNsp(n *nodeStack[T]) {
 	for i := range n.s {
 		n.s[i] = nil
 	}
-	n.startedWithEmpty = false
 	n.s = n.s[:0]
-	for k := range n.seen {
-		delete(n.seen, k)
-	}
 }
 
 func (t *Tree[T]) insertOne(ins *nodeStack[T], item T) {
 	if t.root == nil {
-		ins.startedWithEmpty = true
 		t.root = ins.newNode(item)
 		t.count = 1
 		return
@@ -92,9 +91,7 @@ func (t *Tree[T]) insertOne(ins *nodeStack[T], item T) {
 
 // New allocates a new Tree that will keep itself ordered according to the passed in LessThan.
 func New[T any](lt LessThan[T], items ...T) *Tree[T] {
-	res := &Tree[T]{less: lt, nsp: &sync.Pool{New: func() any {
-		return &nodeStack[T]{seen: map[uintptr]struct{}{}}
-	}}}
+	res := &Tree[T]{less: lt, nsp: &sync.Pool{New: func() any { return &nodeStack[T]{} }}}
 	if len(items) > 0 {
 		ins := res.getNsp()
 		defer res.putNsp(ins)
@@ -157,10 +154,40 @@ func (t *Tree[T]) Cmp(reference T) CompareAgainst[T] {
 	}
 }
 
+func copyNodes[T any](n *node[T], reverse bool) *node[T] {
+	if n == nil {
+		return nil
+	}
+	res := &node[T]{genH: n.h(), i: n.i}
+	if n.l != nil {
+		res.r = copyNodes(n.l, reverse)
+	}
+	if n.r != nil {
+		res.l = copyNodes(n.r, reverse)
+	}
+	if !reverse {
+		res.r, res.l = res.l, res.r
+	}
+	return res
+}
+
 // Fork makes a new copy of the Tree that has the same ordering function and data.
 // It will share nodes with the original Tree.
 func (t *Tree[T]) Fork() *Tree[T] {
-	return &Tree[T]{less: t.less, root: t.root, count: t.count, nsp: t.nsp}
+	res := &Tree[T]{less: t.less, root: t.root, count: t.count, nsp: t.nsp, gen: t.gen + 1}
+	if res.gen < maxGens {
+		return res
+	}
+	// If you fork a Tree every nanosecond for a year, you will roll over gen.
+	//  Which means it is feasible for highly contrived workloads.  To preserve
+	// correctness in that case, if gen gets to maxGens then make a copy of everything in the tree.
+	// In practice, you are not likely to ever hit this without really trying.
+	res.gen = 0
+	if res.root != nil {
+		res.root = copyNodes(res.root, false)
+	}
+	return res
+
 }
 
 // Reverse returns a reversed copy of Tree.  It will not share any resources with Tree.
@@ -325,7 +352,7 @@ func (into *Tree[T]) deleteOne(ins *nodeStack[T], item T) (deleted T, found bool
 	deleted = at.i
 	var alt *node[T]
 	for {
-		if at.h == 1 {
+		if at.h() == 1 {
 			if len(ins.s) > 1 {
 				alt = ins.at(-2)
 				if alt.l == at {
@@ -338,6 +365,7 @@ func (into *Tree[T]) deleteOne(ins *nodeStack[T], item T) (deleted T, found bool
 				into.root = ins.at(0)
 			} else {
 				into.root = nil
+				into.gen = 0
 			}
 			into.count--
 			return
