@@ -8,6 +8,12 @@ type node[T any] struct {
 	i    T        // The item the node is holding.
 }
 
+const (
+	hMask   = uint64(0xff)
+	hOffset = 8
+	maxGen  = uint64(0x00ffffffffffffff)
+)
+
 // nodeStack keeps track of nodes that are modified during insert and delete operations.
 // The node at position 0 is the root of the tree.
 type nodeStack[T any] struct {
@@ -20,14 +26,14 @@ func (ns *nodeStack[T]) clear() {
 }
 
 func (ns *nodeStack[T]) newNode(v T) *node[T] {
-	return &node[T]{i: v, genH: (ns.gen << 8) | 0x01}
+	return &node[T]{i: v, genH: (ns.gen << hOffset) | 0x01}
 }
 
 func (ns *nodeStack[T]) copy(n *node[T]) *node[T] {
 	if n.gen() == ns.gen {
 		return n
 	}
-	return &node[T]{l: n.l, r: n.r, i: n.i, genH: (ns.gen << 8) | (n.h())}
+	return &node[T]{l: n.l, r: n.r, i: n.i, genH: (ns.gen << hOffset) | (n.h())}
 }
 
 func (ns *nodeStack[T]) add(n *node[T]) {
@@ -68,14 +74,14 @@ func (ns *nodeStack[T]) drop() {
 
 // gen returns this node's generation.
 func (n *node[T]) gen() uint64 {
-	return n.genH >> 8
+	return n.genH >> hOffset
 }
 
 // h returns the node's height in the tree from the least significant byte of genH.
 // This limits the tree height to 255, but given that the wost case height of
 // an AVL tree is 1.44(log(n)) we will never overflow it on a 64 bit system
 func (n *node[T]) h() uint64 {
-	return n.genH & 0xff
+	return n.genH & hMask
 }
 
 // balance calculates the relative balance of a node.
@@ -103,7 +109,7 @@ func (n *node[T]) setHeight() {
 		}
 	}
 	h++
-	n.genH &= ^uint64(0xff)
+	n.genH &= ^hMask
 	n.genH |= h
 	return
 }

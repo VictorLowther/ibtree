@@ -8,7 +8,6 @@ const (
 	Equal      = 0
 	Greater    = 1
 	rightHeavy = 2
-	maxGens    = uint64(1 << 56)
 )
 
 // CompareAgainst is a comparison function that compares a reference item to
@@ -175,7 +174,7 @@ func copyNodes[T any](n *node[T], reverse bool) *node[T] {
 // It will share nodes with the original Tree.
 func (t *Tree[T]) Fork() *Tree[T] {
 	res := &Tree[T]{less: t.less, root: t.root, count: t.count, nsp: t.nsp, gen: t.gen + 1}
-	if res.gen < maxGens {
+	if res.gen < maxGen {
 		return res
 	}
 	// If you fork a Tree every nanosecond for a year, you will roll over gen.
