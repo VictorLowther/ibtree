@@ -224,7 +224,7 @@ func (t *Tree[T]) SortBy(l LessThan[T]) *Tree[T] {
 // SortedClone makes a new Tree using SortBy, then inserts all the data from t into it.
 func (t *Tree[T]) SortedClone(l LessThan[T]) *Tree[T] {
 	res := t.SortBy(l)
-	iter := t.Iterator(nil, nil)
+	iter := t.All()
 	ins := &nodeStack[T]{}
 	for iter.Next() {
 		res.insertOne(ins, iter.Item())

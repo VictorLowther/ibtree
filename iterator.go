@@ -339,7 +339,7 @@ func (t *Tree[T]) Before(stop, iterator Test[T]) {
 // Walk will call cmpIter once for each item in the Tree in ascending order.
 // Walk will return early if iterator returns false.
 func (t *Tree[T]) Walk(iterator Test[T]) {
-	i := t.Iterator(nil, nil)
+	i := t.All()
 	for i.Next() {
 		if !iterator(i.Item()) {
 			i.Release()
@@ -442,4 +442,10 @@ func (r *rangeIter[T]) Next() bool {
 // position of the Iter.
 func (t *Tree[T]) OffsetAndLimit(offset, limit int) Iter[T] {
 	return &rangeIter[T]{t: t, offset: offset, limit: limit}
+}
+
+// All returns an iterator that will walk over the entries in the tree.
+// It is shorthand for t.Iterator(nil,nil) or t.OffsetAndLimit(0,-1)
+func (t *Tree[T]) All() Iter[T] {
+	return &rangeIter[T]{t: t, offset: 0, limit: -1}
 }

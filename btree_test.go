@@ -628,7 +628,7 @@ func BenchmarkIntIterAll(b *testing.B) {
 	b.StartTimer()
 	i := 0
 	for i < b.N {
-		all := tree.Iterator(nil, nil)
+		all := tree.All()
 		for all.Next() && i < b.N {
 			if i%(1<<16) != all.Item() {
 				b.Fatal(i, " != ", all.Item())
@@ -777,7 +777,7 @@ func TestCopyOnWriteRace(t *testing.T) {
 				return
 			default:
 				i := 0
-				iter := tree1.Iterator(nil, nil)
+				iter := tree1.All()
 				for iter.Next() {
 					item := iter.Item()
 					if item.i != i || i >= 200 || item.mark != 1 {
@@ -805,7 +805,7 @@ func TestCopyOnWriteRace(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				iter := tree2.Iterator(nil, nil)
+				iter := tree2.All()
 				i := 0
 				for iter.Next() {
 					item := iter.Item()
@@ -842,7 +842,7 @@ func TestCopyOnWriteRace(t *testing.T) {
 			case <-ctx.Done():
 				return
 			default:
-				iter := tree3.Iterator(nil, nil)
+				iter := tree3.All()
 				i := -100
 				for iter.Next() {
 					item := iter.Item()
